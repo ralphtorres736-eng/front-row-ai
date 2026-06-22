@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "FrontRow.AI"
+version = "1.0.0"
+id = "artifacts/frontrow"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23975
+
+[services.development]
+run = "pnpm --filter @workspace/frontrow run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/frontrow", "run", "build" ]
+publicDir = "artifacts/frontrow/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23975"
+BASE_PATH = "/"

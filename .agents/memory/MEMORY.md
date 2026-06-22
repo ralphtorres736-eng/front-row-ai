@@ -1,0 +1,2 @@
+- [gpt-5-mini token param](gpt5mini-token-param.md) — gpt-5-mini requires `max_completion_tokens`, NOT `max_tokens` (causes 400 error)
+- [gpt-5-mini reasoning budget](gpt5mini-reasoning-budget.md) — gpt-5-mini is a reasoning model; needs max_completion_tokens ≥ 1000 or reasoning consumes all tokens leaving zero content

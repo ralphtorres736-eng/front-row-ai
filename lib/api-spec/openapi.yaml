@@ -1,0 +1,401 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: FrontRow.AI — Musixmatch lyrics API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: tracks
+    description: Track search and lyrics
+  - name: shows
+    description: Concert show lookup via JamBase
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /tracks/search:
+    get:
+      operationId: searchTracks
+      tags: [tracks]
+      summary: Search for tracks
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query (track title, artist name, or both)
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Page number
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Results per page (max 100)
+      responses:
+        "200":
+          description: List of matching tracks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Track"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream Musixmatch error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /tracks/{trackId}/richsync:
+    get:
+      operationId: getTrackRichsync
+      tags: [tracks]
+      summary: Get word-level synced lyrics for a track
+      parameters:
+        - name: trackId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Musixmatch track ID
+      responses:
+        "200":
+          description: Rich sync lyrics (word-level timestamps)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RichsyncResponse"
+        "404":
+          description: No rich sync available for this track
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream Musixmatch error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /tracks/{trackId}/synced:
+    get:
+      operationId: getTrackSynced
+      tags: [tracks]
+      summary: Get line-level synced lyrics for a track — middle fallback tier
+      parameters:
+        - name: trackId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Musixmatch track ID
+      responses:
+        "200":
+          description: Line-level synced lyrics (per-line timestamps)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncedLyricsResponse"
+        "404":
+          description: No line-level sync available for this track
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream Musixmatch error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /tracks/{trackId}/lyrics:
+    get:
+      operationId: getTrackLyrics
+      tags: [tracks]
+      summary: Get plain (line-level, unsynced) lyrics for a track — fallback block
+      parameters:
+        - name: trackId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Musixmatch track ID
+      responses:
+        "200":
+          description: Plain lyrics block
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlainLyricsResponse"
+        "404":
+          description: No lyrics available for this track
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream Musixmatch error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /shows:
+    get:
+      operationId: getShows
+      tags: [shows]
+      summary: Search upcoming shows by artist name
+      parameters:
+        - name: artist
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Artist name to search upcoming shows for
+      responses:
+        "200":
+          description: Upcoming shows for the artist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShowsResponse"
+        "400":
+          description: Bad request — artist param missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Upstream JamBase error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Track:
+      type: object
+      required:
+        - track_id
+        - track_name
+        - artist_name
+        - album_name
+        - has_richsync
+        - has_subtitles
+        - spotify_track_id
+        - genre
+      properties:
+        track_id:
+          type: integer
+        track_name:
+          type: string
+        artist_name:
+          type: string
+        album_name:
+          type: string
+        spotify_track_id:
+          type: ["string", "null"]
+          description: Spotify track ID when provided by the upstream payload; null when unavailable
+        genre:
+          type: ["string", "null"]
+          description: Primary Musixmatch genre tag for the track; null when unavailable
+        album_coverart_100x100:
+          type: ["string", "null"]
+        album_coverart_350x350:
+          type: ["string", "null"]
+        has_richsync:
+          type: integer
+          description: 1 if word-level sync is available, 0 otherwise
+        has_subtitles:
+          type: integer
+          description: 1 if line-level sync is available, 0 otherwise
+        track_rating:
+          type: integer
+        num_favourite:
+          type: integer
+
+    RichsyncLine:
+      type: object
+      required:
+        - ts
+        - te
+        - l
+        - x
+      properties:
+        ts:
+          type: number
+          description: Line start time in seconds
+        te:
+          type: number
+          description: Line end time in seconds
+        l:
+          type: array
+          description: Array of word-level entries
+          items:
+            $ref: "#/components/schemas/RichsyncWord"
+        x:
+          type: string
+          description: Full line text
+
+    RichsyncWord:
+      type: object
+      required:
+        - c
+        - o
+      properties:
+        c:
+          type: string
+          description: Word/syllable text
+        o:
+          type: number
+          description: Offset in seconds from line start
+
+    RichsyncResponse:
+      type: object
+      required:
+        - track_id
+        - lines
+        - duration
+      properties:
+        track_id:
+          type: integer
+        duration:
+          type: number
+          description: Total lyrics duration in seconds
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/RichsyncLine"
+
+    SyncedLyricsLine:
+      type: object
+      required:
+        - time
+        - text
+      properties:
+        time:
+          type: number
+          description: Line start time in seconds
+        text:
+          type: string
+          description: Full line text
+
+    SyncedLyricsResponse:
+      type: object
+      required:
+        - track_id
+        - lines
+      properties:
+        track_id:
+          type: integer
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncedLyricsLine"
+
+    PlainLyricsResponse:
+      type: object
+      required:
+        - track_id
+        - lyrics
+      properties:
+        track_id:
+          type: integer
+        lyrics:
+          type: string
+          description: Full plain lyrics body, newline-separated lines (unsynced)
+
+    VenueType:
+      type: string
+      enum: [indoor, outdoor, amphitheater, symphony, festival]
+
+    Show:
+      type: object
+      required:
+        - id
+        - name
+        - venue_name
+        - venue_type
+        - city
+        - state
+        - date
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          description: Event or show name
+        venue_name:
+          type: string
+        venue_type:
+          $ref: "#/components/schemas/VenueType"
+        city:
+          type: string
+        state:
+          type: string
+        date:
+          type: string
+          description: ISO date string from JamBase
+        url:
+          type: ["string", "null"]
+
+    ShowsResponse:
+      type: object
+      required:
+        - artist
+        - shows
+      properties:
+        artist:
+          type: string
+        shows:
+          type: array
+          items:
+            $ref: "#/components/schemas/Show"
